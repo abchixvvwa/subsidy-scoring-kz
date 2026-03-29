@@ -71,11 +71,9 @@
 
 | Компонент | Технология | Назначение |
 |-----------|-----------|------------|
-| `src/preprocessing.py` | pandas, scikit-learn | Очистка и трансформация данных |
-| `src/feature_engineering.py` | pandas, numpy | Генерация признаков |
-| `src/model.py` | scikit-learn | Обучение модели скоринга |
+| `src/preprocessing.py` | pandas, scikit-learn | Очистка, трансформация данных и генерация признаков |
 | `src/scoring.py` | scikit-learn, SHAP | Расчёт итогового скора |
-| `app/main.py` | FastAPI, uvicorn | REST API для интеграции |
+| `src/api.py` | FastAPI, uvicorn | REST API для интеграции |
 | `demo.py` | — | Демонстрационный скрипт |
 
 ---
@@ -95,28 +93,33 @@ cd subsidy-scoring-system
 pip install -r requirements.txt
 ```
 
-### 3. Запуск демо
+### 3. Подготовка данных
+
+Положите исходный файл Excel в папку `data/raw/`:
+
+```
+data/raw/subsidies_2025.xlsx
+```
+
+### 4. Предобработка данных
+
+```bash
+python src/preprocessing.py
+```
+
+### 5. Запуск демо
 
 ```bash
 python demo.py
 ```
 
-### 4. Запуск API-сервера
+### 6. Запуск API-сервера
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn src.api:app --reload
 ```
 
 Документация API будет доступна по адресу: `http://localhost:8000/docs`
-
-### 5. (Опционально) Полный пайплайн обучения
-
-```bash
-python src/preprocessing.py   # Предобработка данных
-python src/feature_engineering.py  # Генерация признаков
-python src/model.py           # Обучение модели
-python src/scoring.py         # Расчёт скоров
-```
 
 ---
 
@@ -130,41 +133,40 @@ python src/scoring.py         # Расчёт скоров
 
 ### Ключевые признаки (Features)
 
-#### 📌 Идентификационные данные
+#### 📊 Статистика заявок
 | Признак | Описание |
 |---------|----------|
-| `applicant_id` | Уникальный идентификатор заявителя (ИИН/БИН) |
-| `region` | Регион / область Казахстана |
-| `application_date` | Дата подачи заявки |
-
-#### 📈 Производственные показатели
-| Признак | Описание |
-|---------|----------|
-| `land_area_ha` | Площадь земельных угодий (га) |
-| `crop_type` | Тип возделываемой культуры |
-| `yield_per_ha` | Урожайность (ц/га) |
-| `livestock_count` | Поголовье скота |
+| `total_applications` | Общее количество поданных заявок |
+| `approved_count` | Количество одобренных заявок |
+| `rejected_count` | Количество отклонённых заявок |
+| `withdrawn_count` | Количество отозванных заявок |
+| `approval_rate` | Доля одобренных заявок |
+| `rejection_rate` | Доля отклонённых заявок |
 
 #### 💰 Финансовые показатели
 | Признак | Описание |
 |---------|----------|
-| `subsidy_amount_requested` | Запрашиваемая сумма субсидии (тг) |
-| `previous_subsidy_received` | Получено субсидий ранее (тг) |
-| `revenue` | Выручка от с/х деятельности (тг) |
+| `total_amount_received` | Суммарная полученная сумма субсидий (тг) |
+| `avg_amount` | Средняя сумма на одну заявку (тг) |
+| `max_amount` | Максимальная сумма по одной заявке (тг) |
 
-#### 🏆 Исторические показатели
+#### 🌐 Диверсификация деятельности
 | Признак | Описание |
 |---------|----------|
-| `application_count` | Количество ранее поданных заявок |
-| `approval_rate` | Доля одобренных заявок |
-| `compliance_score` | Оценка соблюдения условий предыдущих субсидий |
+| `unique_directions` | Количество уникальных направлений субсидирования |
+| `unique_subsidy_types` | Количество уникальных типов субсидий |
 
-#### 📊 Сгенерированные признаки (Feature Engineering)
-| Признак | Формула |
-|---------|---------|
-| `efficiency_score` | `revenue / land_area_ha` |
-| `subsidy_utilization_rate` | `previous_subsidy_received / subsidy_amount_requested` |
-| `application_frequency` | Число заявок за последние 12 месяцев |
+#### 🕐 Временны́е признаки
+| Признак | Описание |
+|---------|----------|
+| `last_activity_days` | Дней с момента последней активности |
+| `first_application_year` | Год первой поданной заявки |
+
+#### 📍 Категориальные признаки
+| Признак | Описание |
+|---------|----------|
+| `oblast` | Область (регион) Казахстана |
+| `primary_direction` | Основное направление субсидирования |
 
 ---
 
