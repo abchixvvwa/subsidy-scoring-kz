@@ -1,0 +1,127 @@
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# ============================================================
+# Virtual Environments
+# ============================================================
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ============================================================
+# Jupyter Notebook
+# ============================================================
+.ipynb_checkpoints
+*.ipynb
+
+# ============================================================
+# Data Files (keep structure, ignore actual data)
+# ============================================================
+data/raw/*.xlsx
+data/raw/*.csv
+data/raw/*.xls
+data/processed/*.csv
+data/processed/*.parquet
+data/processed/*.pkl
+
+# ML Models (large binary files)
+*.pkl
+*.joblib
+*.h5
+*.pt
+*.pth
+models/
+
+# ============================================================
+# IDE & Editors
+# ============================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ============================================================
+# Logs & Temp Files
+# ============================================================
+*.log
+logs/
+tmp/
+temp/
+
+# ============================================================
+# Secrets & Config
+# ============================================================
+.env
+.env.local
+.env.*.local
+config/secrets.yaml
+config/secrets.json
+*.pem
+*.key
+
+# ============================================================
+# OS
+# ============================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
