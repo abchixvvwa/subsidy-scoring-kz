@@ -50,20 +50,20 @@
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   DATA LAYER    │───▶│  ML PIPELINE    │───▶│   API LAYER     │
 │                 │    │                 │    │                 │
-│ • data/raw/     │    │ • Preprocessing │    │ FastAPI /score  │
-│ • data/         │    │ • Feature Eng.  │    │ FastAPI /rank   │
-│   processed/    │    │ • Model Train   │    │ FastAPI /explain│
-│ • Excel/CSV     │    │ • Scoring       │    │                 │
+│ • data/raw/     │    │ • preprocessing │    │ GET /shortlist  │
+│ • data/         │    │ • composite     │    │ GET /explain/id │
+│   processed/    │    │   scoring       │    │ GET /applicant  │
+│ • Excel/CSV     │    │ • explain_score │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                │
                     ┌──────────┴──────────┐
                     │                     │
           ┌─────────▼──────┐   ┌─────────▼──────┐
-          │  SCORING MODEL │   │  EXPLAINABILITY │
+          │  SCORING MODEL │   │ EXPLAINABILITY  │
           │                │   │                 │
-          │ RandomForest / │   │ SHAP Values     │
-          │ GradientBoost  │   │ Feature Import. │
-          │ + Ensemble     │   │ Score Breakdown │
+          │ Composite score│   │ Факторный вклад │
+          │ 5 признаков    │   │ explanation_ru  │
+          │ с весами       │   │ на русском      │
           └────────────────┘   └────────────────┘
 ```
 
