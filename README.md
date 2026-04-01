@@ -53,7 +53,11 @@ A single model cannot satisfy all requirements simultaneously:
 
 ### LightGBM — supervised model
 
-**Target:** `y = 1` if `approval_rate >= 0.7`, else `0`  
+**Target:** `y = 1` если выполнены все три условия:
+`approval_rate >= 0.80`, `total_applications >= 10`,
+`total_amount_received >= 40-й перцентиль по выборке`.
+Это отсеивает заявителей с единичными заявками и фокусирует
+модель на устойчивых производителях.  
 **Features (7):** engineered financial and behavioral signals — no direct leakage from the target
 
 | Feature | Description |
