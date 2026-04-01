@@ -31,7 +31,8 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 # Поддерживаем запуск как из корня репозитория, так и из папки src/
 _BASE_DIR = Path(__file__).resolve().parent.parent  # всегда корень проекта
-FEATURES_PATH = _BASE_DIR / "data" / "processed" / "features.csv"
+FEATURES_PATH   = _BASE_DIR / "data" / "processed" / "features.csv"
+ML_RESULTS_PATH = _BASE_DIR / "data" / "processed" / "ml_results.csv"
 
 # ---------------------------------------------------------------------------
 # Импорт модулей проекта
@@ -41,6 +42,7 @@ if str(_BASE_DIR) not in sys.path:
     sys.path.insert(0, str(_BASE_DIR))
 
 from src.scoring import compute_scores, get_shortlist, explain_score  # noqa: E402
+from src.ml_model import run_full_ml_pipeline                         # noqa: E402
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -76,6 +78,7 @@ app.add_middleware(
 class _AppState:
     features_df: Optional[pd.DataFrame] = None
     scored_df:   Optional[pd.DataFrame] = None
+    ml_df:       Optional[pd.DataFrame] = None   # ml_results.csv (includes cluster/anomaly cols)
     loaded_at:   Optional[datetime]     = None
     load_error:  Optional[str]          = None
 
@@ -84,7 +87,14 @@ _state = _AppState()
 
 
 def _load_data() -> None:
-    """Загружает features.csv и рассчитывает скоры при старте приложения."""
+    """
+    Загружает данные при старте приложения.
+
+    Логика:
+    1. Если ml_results.csv существует — загружает его (уже содержит ML-колонки).
+    2. Иначе — загружает features.csv и запускает run_full_ml_pipeline().
+    3. Дополнительно рассчитывает scored_df (composite score) по features_df.
+    """
     if not FEATURES_PATH.exists():
         _state.load_error = (
             f"Файл признаков не найден: {FEATURES_PATH}. "
@@ -96,7 +106,19 @@ def _load_data() -> None:
     try:
         _state.features_df = pd.read_csv(FEATURES_PATH)
         _state.scored_df   = compute_scores(_state.features_df)
-        _state.loaded_at   = datetime.now(timezone.utc)
+
+        if ML_RESULTS_PATH.exists():
+            _state.ml_df = pd.read_csv(ML_RESULTS_PATH)
+            print(
+                f"[INFO] ML-результаты загружены: {len(_state.ml_df)} заявителей "
+                f"из {ML_RESULTS_PATH}"
+            )
+        else:
+            print("[INFO] ml_results.csv не найден — запускаю ML-пайплайн...")
+            _state.ml_df = run_full_ml_pipeline(_state.features_df)
+            print("[INFO] ML-пайплайн завершён.")
+
+        _state.loaded_at = datetime.now(timezone.utc)
         print(
             f"[INFO] Загружено заявителей: {len(_state.features_df)} "
             f"из {FEATURES_PATH}"
@@ -124,6 +146,19 @@ def _require_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     return _state.features_df, _state.scored_df
 
 
+def _require_ml() -> pd.DataFrame:
+    """Возвращает ml_df; бросает 503 если ML-данные не загружены."""
+    if _state.ml_df is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                _state.load_error
+                or "ML-результаты ещё не готовы. Повторите запрос через несколько секунд."
+            ),
+        )
+    return _state.ml_df
+
+
 # ---------------------------------------------------------------------------
 # Pydantic response models
 # ---------------------------------------------------------------------------
@@ -132,6 +167,7 @@ class HealthResponse(BaseModel):
     status: str = Field(..., example="ok")
     applicants_loaded: int = Field(..., example=457)
     data_file: str = Field(..., example="data/processed/features.csv")
+    ml_results_file: str = Field(..., example="data/processed/ml_results.csv")
     loaded_at: Optional[str] = Field(None, example="2025-03-19T10:00:00Z")
     error: Optional[str] = Field(None, example=None)
 
@@ -171,6 +207,10 @@ class ApplicantProfile(BaseModel):
     first_application_year: Optional[int]
     oblast: str
     primary_direction: str
+    # ML-поля (None если ml_results.csv не содержит этого заявителя)
+    cluster_label:   Optional[str]   = Field(None, example="Крупные эффективные")
+    is_anomaly:      Optional[bool]  = Field(None, example=False)
+    anomaly_reason:  Optional[str]   = Field(None, example="")
 
 
 class FactorDetail(BaseModel):
@@ -193,6 +233,35 @@ class ScoreExplanation(BaseModel):
 class ApplicantDetailResponse(BaseModel):
     profile: ApplicantProfile
     score: ScoreExplanation
+
+
+# ── ML response models ────────────────────────────────────────────────────────
+
+class ClusterInfo(BaseModel):
+    cluster_id:        int   = Field(..., example=0)
+    label:             str   = Field(..., example="Крупные эффективные")
+    count:             int   = Field(..., example=45)
+    avg_score:         float = Field(..., example=0.72)
+    avg_approval_rate: float = Field(..., example=0.91)
+    avg_amount:        float = Field(..., example=500_000_000.0)
+
+
+class ClustersResponse(BaseModel):
+    total_clusters: int
+    clusters: list[ClusterInfo]
+
+
+class AnomalyItem(BaseModel):
+    applicant_id:      str   = Field(..., example="0130010025")
+    anomaly_score:     float = Field(..., example=-0.15)
+    anomaly_reason:    str   = Field(..., example="Аномалия: ...")
+    oblast:            str   = Field(..., example="область Абай")
+    primary_direction: str   = Field(..., example="Субсидирование в скотоводстве")
+
+
+class AnomaliesResponse(BaseModel):
+    total_anomalies: int
+    anomalies: list[AnomalyItem]
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +287,7 @@ async def health() -> HealthResponse:
         status="ok" if _state.features_df is not None else "degraded",
         applicants_loaded=n,
         data_file=str(FEATURES_PATH.relative_to(_BASE_DIR)),
+        ml_results_file=str(ML_RESULTS_PATH.relative_to(_BASE_DIR)),
         loaded_at=loaded_at_str,
         error=_state.load_error,
     )
@@ -282,7 +352,8 @@ async def shortlist(
 )
 async def get_applicant(applicant_id: str) -> ApplicantDetailResponse:
     """
-    Возвращает профиль заявителя из features.csv и детальное объяснение его скора.
+    Возвращает профиль заявителя и детальное объяснение его скора.
+    Дополнительно включает ML-поля: cluster_label, is_anomaly, anomaly_reason.
 
     - **applicant_id** — первые 10 символов номера заявки (app_num)
     """
@@ -296,6 +367,18 @@ async def get_applicant(applicant_id: str) -> ApplicantDetailResponse:
         )
 
     row = features_df[mask].iloc[0]
+
+    # ML-поля из ml_df (если доступны)
+    cluster_label  = None
+    is_anomaly     = None
+    anomaly_reason = None
+    if _state.ml_df is not None:
+        ml_mask = _state.ml_df["applicant_id"].astype(str) == applicant_id
+        if ml_mask.any():
+            ml_row         = _state.ml_df[ml_mask].iloc[0]
+            cluster_label  = str(ml_row.get("cluster_label", "")) or None
+            is_anomaly     = bool(ml_row.get("is_anomaly", False))
+            anomaly_reason = str(ml_row.get("anomaly_reason", "")) or None
 
     # Профиль
     profile = ApplicantProfile(
@@ -315,6 +398,9 @@ async def get_applicant(applicant_id: str) -> ApplicantDetailResponse:
         first_application_year=_safe_int(row.get("first_application_year")),
         oblast=str(row.get("oblast", "")),
         primary_direction=str(row.get("primary_direction", "")),
+        cluster_label=cluster_label,
+        is_anomaly=is_anomaly,
+        anomaly_reason=anomaly_reason,
     )
 
     # Скор + объяснение
@@ -344,6 +430,81 @@ async def explain(applicant_id: str) -> ScoreExplanation:
         )
 
     return _build_score_explanation(applicant_id, features_df)
+
+
+@app.get(
+    "/clusters",
+    response_model=ClustersResponse,
+    summary="Статистика по кластерам заявителей",
+    tags=["ML"],
+)
+async def get_clusters() -> ClustersResponse:
+    """
+    Возвращает агрегированную статистику по каждому кластеру K-Means:
+    количество заявителей, средние значения approval_rate, суммы субсидий
+    и composite score.
+    """
+    ml_df      = _require_ml()
+    _, scored  = _require_data()
+
+    # Присоединяем final_score из scored_df для avg_score
+    score_col = scored[["applicant_id", "final_score"]].copy()
+    merged    = ml_df.merge(
+        score_col, on="applicant_id", how="left", suffixes=("", "_scored")
+    )
+
+    clusters: list[ClusterInfo] = []
+    for (cid, label), grp in merged.groupby(["cluster", "cluster_label"]):
+        clusters.append(
+            ClusterInfo(
+                cluster_id=int(cid),
+                label=str(label),
+                count=len(grp),
+                avg_score=round(float(grp["final_score"].mean(skipna=True)), 4)
+                          if "final_score" in grp.columns else 0.0,
+                avg_approval_rate=round(float(grp["approval_rate"].mean()), 4),
+                avg_amount=round(float(grp["total_amount_received"].mean()), 2),
+            )
+        )
+
+    # Сортируем по avg_score убывающим (лучший кластер первым)
+    clusters.sort(key=lambda c: c.avg_score, reverse=True)
+
+    return ClustersResponse(total_clusters=len(clusters), clusters=clusters)
+
+
+@app.get(
+    "/anomalies",
+    response_model=AnomaliesResponse,
+    summary="Список подозрительных заявителей (аномалии)",
+    tags=["ML"],
+)
+async def get_anomalies() -> AnomaliesResponse:
+    """
+    Возвращает заявителей, помеченных Isolation Forest как аномальные.
+    Отсортированы по anomaly_score по возрастанию (наиболее подозрительные — первые).
+    """
+    ml_df = _require_ml()
+
+    anom_df = (
+        ml_df[ml_df["is_anomaly"]]
+        .sort_values("anomaly_score")
+        .reset_index(drop=True)
+    )
+
+    anomalies: list[AnomalyItem] = []
+    for _, row in anom_df.iterrows():
+        anomalies.append(
+            AnomalyItem(
+                applicant_id=str(row["applicant_id"]),
+                anomaly_score=round(float(row["anomaly_score"]), 6),
+                anomaly_reason=str(row.get("anomaly_reason", "")),
+                oblast=str(row.get("oblast", "")),
+                primary_direction=str(row.get("primary_direction", "")),
+            )
+        )
+
+    return AnomaliesResponse(total_anomalies=len(anomalies), anomalies=anomalies)
 
 
 # ---------------------------------------------------------------------------
