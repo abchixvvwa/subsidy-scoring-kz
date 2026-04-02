@@ -24,7 +24,13 @@ python -m pip install -r requirements.txt
 
 ### 2. Данные
 
-Положите исходный Excel в `data/raw/subsidies_2025.xlsx` (или путь из `src/preprocessing.py`).
+По умолчанию `src/preprocessing.py` читает файл:
+
+`data/raw/Выгрузка по выданным субсидиям 2025 год (обезлич).xlsx`
+
+Если ваш файл называется иначе — положите его в `data/raw/` и поправьте переменную `RAW_PATH` в конце `src/preprocessing.py` (или переименуйте файл под этот путь).
+
+**После `git clone` артефакты `data/processed/*.csv` и модели в репозитории не лежат** (они в `.gitignore`). Пока не выполнены шаги 3–4, `python app/server.py` отдаст пустой `/api/all` — это ожидаемо.
 
 ### 3. Пайплайн
 
