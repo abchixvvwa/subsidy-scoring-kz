@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>КазнаЛинза · аналитика госпрограмм · KZ-2025</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  :root {
+    --bg: #0B0F17;
+    --surface: #0E1118;
+    --surface2: #131826;
+    --border: rgba(255,255,255,0.08);
+    --text: #E6E7EB;
+    --text2: #B6B7C2;
+    --text3: #7A7F8E;
+    --blue: #007AFF;
+    --green: #34C759;
+    --red: #FF3B30;
+    --orange: #FF9500;
+    --purple: #5856D6;
+    --radius: 16px;
+    --shadow: 0 18px 40px rgba(0,0,0,0.35);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                 "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: 240px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+  }
+
+  .sidebar-logo {
+    padding: 28px 20px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-title {
+    font-size: 17px; font-weight: 600;
+    letter-spacing: -0.4px; color: var(--text);
+  }
+
+  .logo-sub {
+    font-size: 11px; color: var(--text3);
+    margin-top: 2px; letter-spacing: 0.2px;
+  }
+
+  .sidebar-nav {
+    padding: 12px 0;
+    flex: 0 0 auto;
+  }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 20px;
+    font-size: 14px; font-weight: 500;
+    color: var(--text2);
+    cursor: pointer;
+    border-radius: 10px;
+    margin: 2px 8px;
+    transition: all 0.15s;
+    border: none; background: none; width: calc(100% - 16px);
+    text-align: left;
+  }
+
+  .nav-item:hover { background: var(--surface2); }
+
+  .nav-item.active {
+    background: rgba(0,122,255,0.18);
+    color: var(--blue);
+  }
+
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+
+  .sidebar-status {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* FILTERS */
+  .sidebar-filters {
+    padding: 14px 20px 12px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+
+  .sidebar-spacer { flex: 1; }
+
+  .filters-title {
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 1px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+
+  .filter-block { margin-bottom: 14px; }
+
+  .filter-label {
+    font-size: 11px;
+    color: var(--text3);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  .filter-select {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+  }
+
+  .filter-select:focus {
+    border-color: rgba(0,122,255,0.9);
+    box-shadow: 0 0 0 4px rgba(0,122,255,0.12);
+  }
+
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%; background: var(--green);
+    display: inline-block; margin-right: 6px;
+    box-shadow: 0 0 0 2px rgba(52,199,89,0.25);
+  }
+
+  .status-text {
+    font-size: 12px; color: var(--green); font-weight: 500;
+  }
+
+  .status-detail {
+    font-size: 11px; color: var(--text3);
+    margin-top: 4px; line-height: 1.5;
+  }
+
+  /* MAIN */
+  .main {
+    margin-left: 240px;
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+  }
+
+  /* HEADER */
+  .header {
+    background: rgba(11,15,23,0.82);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 28px;
+    position: sticky; top: 0; z-index: 50;
+  }
+
+  .metrics-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+  }
+
+  .metric-label {
+    font-size: 12px; color: var(--text3);
+    font-weight: 500; letter-spacing: 0.1px;
+    margin-bottom: 6px;
+  }
+
+  .metric-value {
+    font-size: 32px; font-weight: 700;
+    letter-spacing: -1px; color: var(--text);
+    line-height: 1;
+  }
+
+  .metric-sub {
+    font-size: 12px; color: var(--text3);
+    margin-top: 4px;
+  }
+
+  .metric-badge {
+    display: inline-block;
+    font-size: 11px; font-weight: 500;
+    padding: 2px 8px; border-radius: 20px;
+    background: rgba(52,199,89,0.12);
+    color: var(--green);
+    margin-top: 4px;
+  }
+
+  /* TABS */
+  .tabs-bar {
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    display: flex; gap: 4px;
+  }
+
+  .tab-btn {
+    padding: 14px 20px;
+    font-size: 14px; font-weight: 500;
+    color: var(--text3);
+    border: none; background: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+    letter-spacing: -0.1px;
+  }
+
+  .tab-btn:hover { color: var(--text2); }
+
+  .tab-btn.active {
+    color: var(--blue);
+    border-bottom-color: var(--blue);
+  }
+
+  /* CONTENT */
+  .content {
+    padding: 28px;
+    flex: 1;
+  }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .page-header { margin-bottom: 24px; }
+
+  .page-eyebrow {
+    font-size: 11px; font-weight: 600;
+    color: var(--text3); letter-spacing: 0.8px;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+
+  .page-title {
+    font-size: 26px; font-weight: 700;
+    letter-spacing: -0.6px; color: var(--text);
+  }
+
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center;
+    justify-content: space-between;
+  }
+
+  .card-title {
+    font-size: 15px; font-weight: 600;
+    letter-spacing: -0.2px;
+  }
+
+  .card-body { padding: 20px; }
+
+  /* TABLE */
+  .data-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .data-table th {
+    padding: 10px 16px;
+    text-align: left;
+    font-size: 11px; font-weight: 600;
+    color: var(--text3); letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.03);
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    color: var(--text2);
+    vertical-align: middle;
+  }
+
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: rgba(0,122,255,0.06); }
+
+  .rating-row {
+    cursor: pointer;
+    transition: background 0.12s ease;
+  }
+  .rating-row:hover td { background: rgba(0,122,255,0.1) !important; }
+  .rating-row:focus { outline: none; }
+  .rating-row:focus-visible td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
+
+  /* PROGRESS */
+  .progress-wrap {
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .progress-bar {
+    flex: 1; height: 5px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px; overflow: hidden;
+    min-width: 80px;
+  }
+
+  .progress-fill {
+    height: 100%; border-radius: 3px;
+    background: var(--blue);
+    transition: width 0.4s ease;
+  }
+
+  .progress-fill.green { background: var(--green); }
+  .progress-fill.orange { background: var(--orange); }
+  .progress-fill.red { background: var(--red); }
+
+  .progress-val {
+    font-size: 12px; color: var(--text3);
+    font-weight: 500; min-width: 32px;
+    text-align: right;
+  }
+
+  .progress-cell { min-width: 120px; }
+  .progress-num {
+    font-size: 11px;
+    color: var(--text3);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    margin-top: 4px;
+    letter-spacing: -0.02em;
+  }
+
+  /* Factor importance bars */
+  .factor-bars { display:flex; flex-direction:column; gap:14px; }
+  .factor-row {
+    display:grid;
+    grid-template-columns: 1fr 160px 90px;
+    gap: 14px;
+    align-items:center;
+  }
+  .factor-label {
+    color: var(--text2);
+    font-weight: 600;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .factor-track {
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 999px;
+    overflow:hidden;
+  }
+  .factor-fill {
+    height: 100%;
+    background: linear-gradient(90deg, rgba(0,122,255,0.95), rgba(88,86,214,0.9));
+    border-radius: 999px;
+    transition: width 0.35s ease;
+  }
+  .factor-val {
+    text-align:right;
+    color: var(--text3);
+    font-size: 13px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .factor-bars .loading { padding: 28px 0; }
+
+  /* BADGES */
+  .badge {
+    display: inline-block;
+    font-size: 11px; font-weight: 500;
+    padding: 3px 10px; border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .badge-blue   { background: rgba(0,122,255,0.1);   color: var(--blue); }
+  .badge-green  { background: rgba(52,199,89,0.1);   color: var(--green); }
+  .badge-orange { background: rgba(255,149,0,0.1);   color: var(--orange); }
+  .badge-red    { background: rgba(255,59,48,0.1);   color: var(--red); }
+  .badge-purple { background: rgba(88,86,214,0.1);   color: var(--purple); }
+
+  /* SCORE GRADES (circles like in screenshot) */
+  .grade-circle {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 800;
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.12) inset;
+    letter-spacing: -0.2px;
+  }
+
+  .grade-a-plus { background: rgba(0,122,255,0.12); color: var(--blue); border-color: rgba(0,122,255,0.35); }
+  .grade-a      { background: rgba(52,199,89,0.12); color: var(--green); border-color: rgba(52,199,89,0.35); }
+  .grade-b      { background: rgba(255,149,0,0.12); color: var(--orange); border-color: rgba(255,149,0,0.35); }
+  .grade-c      { background: rgba(255,59,48,0.12); color: var(--red); border-color: rgba(255,59,48,0.35); }
+  .grade-d      { background: rgba(88,86,214,0.12); color: var(--purple); border-color: rgba(88,86,214,0.35); }
+
+  .risk-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(255,59,48,0.08);
+    border: 1px solid rgba(255,59,48,0.25);
+    color: var(--red);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .anomaly-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 0 3px rgba(255,59,48,0.2);
+    display: inline-block;
+  }
+
+  /* SEARCH */
+  .search-wrap { position: relative; margin-bottom: 20px; }
+
+  .search-input {
+    width: 100%; padding: 13px 18px;
+    font-size: 15px; font-family: inherit;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    box-shadow: var(--shadow);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .search-input:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 4px rgba(0,122,255,0.12);
+  }
+
+  .search-input::placeholder { color: var(--text3); }
+
+  /* APPLICANT DETAIL */
+  .score-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 14px; margin-bottom: 16px;
+  }
+
+  .score-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    position: relative; overflow: hidden;
+  }
+
+  .score-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 3px;
+  }
+
+  .score-card.blue::before   { background: var(--blue); }
+  .score-card.orange::before { background: var(--orange); }
+
+  .score-label {
+    font-size: 11px; font-weight: 600;
+    color: var(--text3); letter-spacing: 0.8px;
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+
+  .score-number {
+    font-size: 48px; font-weight: 700;
+    letter-spacing: -2px; line-height: 1;
+  }
+
+  .score-number.blue   { color: var(--blue); }
+  .score-number.orange { color: var(--orange); }
+
+  .score-rank {
+    font-size: 12px; color: var(--text3); margin-top: 6px;
+  }
+
+  .detail-grid {
+    display: grid; grid-template-columns: 1.2fr 1fr 1fr;
+    gap: 16px;
+  }
+
+  .profile-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .profile-field { margin-bottom: 16px; }
+  .profile-field:last-child { margin-bottom: 0; }
+
+  .field-label {
+    font-size: 11px; color: var(--text3);
+    font-weight: 500; letter-spacing: 0.3px;
+    text-transform: uppercase; margin-bottom: 3px;
+  }
+
+  .field-value {
+    font-size: 15px; color: var(--text);
+    font-weight: 500; letter-spacing: -0.2px;
+  }
+
+  .anomaly-alert {
+    background: rgba(255,59,48,0.06);
+    border: 1px solid rgba(255,59,48,0.15);
+    border-radius: 12px; padding: 14px 16px;
+    margin-top: 12px;
+  }
+
+  .anomaly-alert-title {
+    font-size: 12px; font-weight: 600;
+    color: var(--red); letter-spacing: 0.3px;
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .anomaly-alert-text {
+    font-size: 13px; color: var(--text2);
+    line-height: 1.5;
+  }
+
+  .ok-alert {
+    background: rgba(52,199,89,0.06);
+    border: 1px solid rgba(52,199,89,0.15);
+    border-radius: 12px; padding: 14px 16px;
+    margin-top: 12px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--green); font-weight: 500;
+  }
+
+  .discrepancy-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255,149,0,0.1);
+    border: 1px solid rgba(255,149,0,0.2);
+    border-radius: 8px; padding: 6px 12px;
+    font-size: 12px; color: var(--orange); font-weight: 500;
+    margin-bottom: 16px;
+  }
+
+  /* ANOMALY TABLE */
+  .warn-banner {
+    background: rgba(255,59,48,0.06);
+    border: 1px solid rgba(255,59,48,0.12);
+    border-radius: 12px; padding: 14px 20px;
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .warn-icon {
+    width: 36px; height: 36px; border-radius: 9px;
+    background: rgba(255,59,48,0.1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+
+  .warn-title {
+    font-size: 14px; font-weight: 600; color: var(--red);
+  }
+
+  .warn-sub {
+    font-size: 13px; color: var(--text3); margin-top: 2px;
+  }
+
+  .anomaly-row { background: rgba(255,59,48,0.03); }
+
+  /* CHARTS */
+  .chart-container   { position: relative; width: 100%; height: 340px; }
+  .scatter-container { position: relative; width: 100%; height: 440px; }
+
+  /* SEGMENTS */
+  .segments-bottom {
+    display: grid; grid-template-columns: 280px 1fr;
+    gap: 16px; margin-top: 16px;
+  }
+
+  .cluster-table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+
+  .cluster-table th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px; font-weight: 600;
+    color: var(--text3); letter-spacing: 0.5px;
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cluster-table td {
+    padding: 11px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    color: var(--text2);
+  }
+
+  .cluster-table tr:last-child td { border-bottom: none; }
+
+  /* SLIDER */
+  .slider-wrap {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 18px; padding: 14px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px; box-shadow: var(--shadow);
+  }
+
+  .slider-label { font-size: 13px; color: var(--text2); font-weight: 500; white-space: nowrap; }
+  .slider-val   { font-size: 13px; color: var(--blue); font-weight: 600; min-width: 28px; }
+
+  input[type=range] { flex: 1; accent-color: var(--blue); height: 4px; cursor: pointer; }
+
+  /* LOADING */
+  .loading { text-align: center; padding: 60px; color: var(--text3); font-size: 14px; }
+
+  .spinner {
+    width: 28px; height: 28px;
+    border: 2px solid rgba(0,122,255,0.2);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto 12px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-title">КазнаЛинза</div>
+    <div class="logo-sub">Прозрачность потоков субсидий и рисков · Decentrathon 5.0</div>
+  </div>
+  <nav class="sidebar-nav">
+    <button class="nav-item active" onclick="showPage('rating',this)">
+      <span class="nav-icon">01</span> Рейтинг заявителей
+    </button>
+    <button class="nav-item" onclick="showPage('applicant',this)">
+      <span class="nav-icon">02</span> Профиль заявителя
+    </button>
+    <button class="nav-item" onclick="showPage('segments',this)">
+      <span class="nav-icon">03</span> Сегменты рынка
+    </button>
+    <button class="nav-item" onclick="showPage('anomalies',this)">
+      <span class="nav-icon">04</span> Аномалии (мошенничество)
+    </button>
+  </nav>
+  <div class="sidebar-filters">
+    <div class="filters-title">Фильтры</div>
+
+    <div class="filter-block">
+      <div class="filter-label">Регион</div>
+      <select id="filter-region" class="filter-select" onchange="onFiltersChanged()">
+        <option value="all">Все регионы</option>
+      </select>
+    </div>
+
+    <div class="filter-block">
+      <div class="filter-label">Тип субсидии</div>
+      <select id="filter-type" class="filter-select" onchange="onFiltersChanged()">
+        <option value="all">Все типы</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="sidebar-spacer"></div>
+
+  <div class="sidebar-status">
+    <div>
+      <span class="status-dot"></span>
+      <span class="status-text">Система активна</span>
+    </div>
+    <div class="status-detail">
+      Модель бустинга · k-средних · изоляционный лес<br>
+      36 651 заявка · 457 заявителей
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="metrics-row" id="metrics-row">
+      <div class="loading"><div class="spinner"></div>Загрузка...</div>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- PAGE: RATING -->
+    <div class="page active" id="page-rating">
+      <div class="page-header">
+        <div class="page-eyebrow">ИИ-рейтинг · композитный скор · градиентный бустинг</div>
+        <div class="page-title">Рейтинг заявителей</div>
+        <div style="margin-top:8px;font-size:13px;color:var(--text3);">Нажмите на строку — откроется профиль заявителя</div>
+      </div>
+      <div class="slider-wrap">
+        <span class="slider-label">Показать топ</span>
+        <input type="range" min="5" max="50" value="20" id="top-n-slider"
+               oninput="document.getElementById('top-n-val').textContent=this.value; renderRating()">
+        <span class="slider-val" id="top-n-val">20</span>
+        <span class="slider-label">заявителей</span>
+      </div>
+      <div class="search-wrap" style="margin-bottom:16px;">
+        <input type="search" id="rating-search" class="search-input"
+               placeholder="Поиск: код заявителя, регион, кластер, направление…"
+               autocomplete="off"
+               oninput="onRatingSearchInput(this.value)">
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <table class="data-table" id="rating-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Код заявителя</th>
+              <th>ИИ-скор</th>
+              <th>Доля одобр.</th>
+              <th>Композит</th>
+              <th>Кластер</th>
+              <th>Аномалия</th>
+              <th>Регион</th>
+            </tr>
+          </thead>
+          <tbody id="rating-tbody">
+            <tr><td colspan="8" class="loading"><div class="spinner"></div>Загрузка данных...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PAGE: APPLICANT -->
+    <div class="page" id="page-applicant">
+      <div class="page-header">
+        <div class="page-eyebrow">Профиль · Модели · Аномалия</div>
+        <div class="page-title">Анализ заявителя</div>
+      </div>
+      <div class="search-wrap">
+        <input class="search-input" type="text" id="applicant-input"
+               placeholder="Введите ID заявителя (например: 120010028)"
+               oninput="lookupApplicant(this.value)">
+      </div>
+      <div id="applicant-result"></div>
+    </div>
+
+    <!-- PAGE: SEGMENTS -->
+    <div class="page" id="page-segments">
+      <div class="page-header">
+        <div class="page-eyebrow">Кластеризация · метод k-средних</div>
+        <div class="page-title">Сегменты заявителей</div>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <span class="card-title">Карта заявителей по сегментам</span>
+          <span class="badge badge-blue">457 точек</span>
+        </div>
+        <div class="card-body">
+          <div class="scatter-container">
+            <canvas id="chart-scatter"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="segments-bottom">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Распределение</span></div>
+          <div class="card-body" style="display:flex;align-items:center;justify-content:center;height:220px;">
+            <canvas id="chart-donut" style="max-height:200px;"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Статистика по кластерам</span></div>
+          <table class="cluster-table" id="cluster-table">
+            <thead><tr>
+              <th>Кластер</th><th>Кол-во</th>
+              <th>Ср. ИИ-скор</th><th>Ср. доля одобр.</th>
+              <th>Ср. субсидий, млн тг</th>
+            </tr></thead>
+            <tbody id="cluster-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: ANOMALIES -->
+    <div class="page" id="page-anomalies">
+      <div class="page-header">
+        <div class="page-eyebrow">Детекция аномалий · изоляционный лес</div>
+        <div class="page-title">Аномальные заявители</div>
+      </div>
+      <div id="anomaly-banner"></div>
+      <div class="search-wrap" style="margin-bottom:16px;">
+        <input type="search" id="anomaly-search" class="search-input"
+               placeholder="Поиск аномалий: код, регион, причина, направление…"
+               autocomplete="off"
+               oninput="onAnomalySearchInput(this.value)">
+      </div>
+      <div class="card">
+        <table class="data-table" id="anomaly-table">
+          <thead>
+            <tr>
+              <th>Код заявителя</th>
+              <th>ИИ-скор</th>
+              <th>Скор аномалии</th>
+              <th>Причина</th>
+              <th>Регион</th>
+              <th>Направление</th>
+            </tr>
+          </thead>
+          <tbody id="anomaly-tbody">
+            <tr><td colspan="6" class="loading"><div class="spinner"></div>Загрузка данных...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+// API backend:
+// - Если страница открыта через `app/server.py`, то origin уже правильный (http://localhost:8502)
+// - Если открыть index.html напрямую (file://), origin может быть "null" — тогда fallback на localhost:8502
+const API = (window.location.origin && window.location.origin !== 'null')
+  ? window.location.origin
+  : 'http://localhost:8502';
+let ALL_DATA = [];
+let FILTER_REGION = 'all';
+let FILTER_TYPE = 'all';
+let RATING_SEARCH_QUERY = '';
+let ANOMALY_SEARCH_QUERY = '';
+
+function isAnomalyFlag(v) {
+  // Сервер может прислать bool (true/false) или строку ("True"/"False")
+  return v === true || v === 'True' || v === 'true' || v === 1 || v === '1';
+}
+
+function getFilteredData() {
+  return ALL_DATA.filter(r => {
+    const regionOk = (FILTER_REGION === 'all') || (String(r.oblast || '') === FILTER_REGION);
+    const typeOk = (FILTER_TYPE === 'all') || (String(r.primary_direction || '') === FILTER_TYPE);
+    return regionOk && typeOk;
+  });
+}
+
+function renderFilters() {
+  const regionSelect = document.getElementById('filter-region');
+  const typeSelect = document.getElementById('filter-type');
+  if (!regionSelect || !typeSelect) return;
+
+  const regions = Array.from(new Set(ALL_DATA.map(r => r.oblast).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b), 'ru'));
+  const types = Array.from(new Set(ALL_DATA.map(r => r.primary_direction).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b), 'ru'));
+
+  regionSelect.innerHTML =
+    `<option value="all">Все регионы</option>` +
+    regions.map(v => `<option value="${String(v).replace(/"/g, '&quot;')}">${String(v)}</option>`).join('');
+
+  // Чтобы выпадающий список не был огромным, показываем только первые N типов.
+  typeSelect.innerHTML =
+    `<option value="all">Все типы</option>` +
+    types.slice(0, 30).map(v => `<option value="${String(v).replace(/"/g, '&quot;')}">${String(v)}</option>`).join('');
+}
+
+function onFiltersChanged() {
+  const regionSelect = document.getElementById('filter-region');
+  const typeSelect = document.getElementById('filter-type');
+  FILTER_REGION = regionSelect ? regionSelect.value : 'all';
+  FILTER_TYPE = typeSelect ? typeSelect.value : 'all';
+
+  renderMetrics();
+  renderRating();
+  renderSegments();
+  renderAnomalies();
+}
+
+function onRatingSearchInput(val) {
+  RATING_SEARCH_QUERY = val || '';
+  renderRating();
+}
+
+function onAnomalySearchInput(val) {
+  ANOMALY_SEARCH_QUERY = val || '';
+  renderAnomalies();
+}
+
+/** Поиск по рейтингу: ID (с/без ведущих нулей), регион, кластер, направление */
+function matchesRatingSearch(r, q) {
+  const needle = (q || '').trim().toLowerCase();
+  if (!needle) return true;
+  const idNorm = normalizeApplicantId(String(r.applicant_id ?? '')).toLowerCase();
+  const idRaw = String(r.applicant_id ?? '').toLowerCase();
+  const oblast = String(r.oblast || '').toLowerCase();
+  const cluster = String(r.cluster_label || '').toLowerCase();
+  const direction = String(r.primary_direction || '').toLowerCase();
+  return idNorm.includes(needle) || idRaw.includes(needle)
+    || oblast.includes(needle) || cluster.includes(needle) || direction.includes(needle);
+}
+
+/** Поиск по таблице аномалий */
+function matchesAnomalySearch(r, q) {
+  const needle = (q || '').trim().toLowerCase();
+  if (!needle) return true;
+  const idNorm = normalizeApplicantId(String(r.applicant_id ?? '')).toLowerCase();
+  const idRaw = String(r.applicant_id ?? '').toLowerCase();
+  const oblast = String(r.oblast || '').toLowerCase();
+  const reason = String(r.anomaly_reason || '').toLowerCase();
+  const direction = String(r.primary_direction || '').toLowerCase();
+  return idNorm.includes(needle) || idRaw.includes(needle)
+    || oblast.includes(needle) || reason.includes(needle) || direction.includes(needle);
+}
+
+const CLUSTER_COLORS = {
+  'Крупные эффективные': '#007AFF',
+  'Малые активные':      '#34C759',
+  'Средние стабильные':  '#FF9500',
+  'Малые рискованные':   '#FF3B30',
+};
+
+const CLUSTER_BADGE = {
+  'Крупные эффективные': 'badge-blue',
+  'Малые активные':      'badge-green',
+  'Средние стабильные':  'badge-orange',
+  'Малые рискованные':   'badge-red',
+};
+
+// ── NAVIGATION ───────────────────────────────────────────────────────────────
+function showPage(name, btn, isTab=false) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ── PROGRESS BAR ─────────────────────────────────────────────────────────────
+function progressHTML(val, cls='') {
+  const v = Number(val);
+  const safe = Number.isFinite(v) ? v : 0;
+  const pct = Math.min(100, Math.max(0, Math.round(safe * 100)));
+  return `<div class="progress-cell">
+    <div class="progress-wrap">
+      <div class="progress-bar">
+        <div class="progress-fill ${cls}" style="width:${pct}%"></div>
+      </div>
+      <span class="progress-val">${safe.toFixed(3)}</span>
+    </div>
+    <div class="progress-num">${(safe * 100).toFixed(1)}%</div>
+  </div>`;
+}
+
+// ── LOAD DATA ─────────────────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    const r = await fetch(API + '/api/all');
+    const raw = await r.json();
+    ALL_DATA = raw.map(r => {
+        const clean = {};
+        Object.keys(r).forEach(k => {
+            clean[k.replace(/^\uFEFF/, '')] = r[k];
+        });
+        return clean;
+    });
+    renderFilters();
+    onFiltersChanged();
+  } catch(e) {
+    document.getElementById('metrics-row').innerHTML =
+      `<div style="color:var(--red);font-size:13px;padding:10px;grid-column:1/-1;">
+        Нет соединения с сервером.<br>
+        Запустите: <code style="background:var(--surface2);padding:2px 8px;border-radius:6px;border:1px solid var(--border);">python app/server.py</code>
+      </div>`;
+  }
+}
+
+// ── METRICS ───────────────────────────────────────────────────────────────────
+function renderMetrics() {
+  const data = getFilteredData();
+  const n = data.length;
+  const avgML = n ? (data.reduce((s, r) => s + parseFloat(r.ml_probability || 0), 0) / n) : 0;
+  const anomCount = data.filter(r => isAnomalyFlag(r.is_anomaly)).length;
+
+  const regionMap = {};
+  data.forEach(r => {
+    regionMap[r.oblast] = (regionMap[r.oblast]||0) + parseFloat(r.total_amount_received||0);
+  });
+  const topRegion = Object.entries(regionMap).sort((a,b) => b[1]-a[1])[0]?.[0] || '—';
+
+  document.getElementById('metrics-row').innerHTML = `
+    <div class="metric-card">
+      <div class="metric-label">Всего заявителей</div>
+      <div class="metric-value">${n}</div>
+      <div class="metric-sub">36 651 заявок</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Средний ИИ-скор</div>
+      <div class="metric-value">${avgML.toFixed(2)}</div>
+      <div class="metric-sub">модель градиентного бустинга</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Аномалий</div>
+      <div class="metric-value">${anomCount}</div>
+      <span class="metric-badge">из ${n} заявителей</span>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Топ регион</div>
+      <div class="metric-value" style="font-size:18px;letter-spacing:-0.3px;">
+        ${topRegion.replace('область','').replace('Республика','').trim()}
+      </div>
+      <div class="metric-sub">по сумме субсидий</div>
+    </div>`;
+}
+
+// ── RATING ────────────────────────────────────────────────────────────────────
+function gradeFromMl(p) {
+  if (p >= 0.85) return { text: 'А+', cls: 'grade-a-plus' };
+  if (p >= 0.75) return { text: 'А', cls: 'grade-a' };
+  if (p >= 0.65) return { text: 'Б', cls: 'grade-b' };
+  if (p >= 0.55) return { text: 'В', cls: 'grade-c' };
+  return { text: 'Г', cls: 'grade-d' };
+}
+
+function renderRating() {
+  const base = getFilteredData().filter(r => matchesRatingSearch(r, RATING_SEARCH_QUERY));
+  const topN = parseInt(document.getElementById('top-n-slider').value);
+  const sorted = [...base]
+    .sort((a, b) => parseFloat(b.ml_probability || 0) - parseFloat(a.ml_probability || 0))
+    .slice(0, topN);
+
+  const tbody = document.getElementById('rating-tbody');
+  tbody.innerHTML = sorted.length
+    ? sorted.map((r, i) => {
+        const ml = parseFloat(r.ml_probability || 0);
+        const ar = parseFloat(r.approval_rate || 0);
+        const comp = parseFloat(r.final_score || 0);
+        const isAnom = isAnomalyFlag(r.is_anomaly);
+
+        const mlCls = ml >= 0.8 ? 'green' : ml >= 0.6 ? '' : ml >= 0.45 ? 'orange' : 'red';
+        const compCls = comp >= 0.8 ? 'green' : comp >= 0.6 ? 'orange' : 'red';
+        const grade = gradeFromMl(ml);
+
+        const regionTxt = (r.oblast || '').replace(' область', '').replace('область ', '').trim();
+
+        const aidEsc = String(r.applicant_id).replace(/"/g, '&quot;');
+        return `<tr class="rating-row" role="button" tabindex="0" data-aid="${aidEsc}" title="Открыть профиль">
+          <td style="color:var(--text3);font-weight:500;">${i + 1}</td>
+          <td style="font-weight:600;font-variant-numeric:tabular-nums;">${r.applicant_id}</td>
+          <td>${progressHTML(ml, mlCls)}</td>
+          <td>${progressHTML(ar, 'green')}</td>
+          <td>${progressHTML(comp, compCls)}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span class="grade-circle ${grade.cls}">${grade.text}</span>
+              <span class="badge badge-purple" style="opacity:0.95;">${r.cluster_label || '—'}</span>
+            </div>
+          </td>
+          <td style="text-align:center;">
+            ${isAnom
+              ? `<span class="risk-pill">Высокий риск</span>`
+              : `<span style="color:var(--text3);">—</span>`}
+          </td>
+          <td style="color:var(--text3);font-size:12px;">${regionTxt || '—'}</td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="8" class="loading"><div class="spinner"></div>${
+        RATING_SEARCH_QUERY.trim()
+          ? 'Никого не найдено по поиску'
+          : 'Нет данных по фильтрам'
+      }</td></tr>`;
+
+  tbody.querySelectorAll('tr.rating-row').forEach(tr => {
+    const aid = tr.getAttribute('data-aid');
+    tr.addEventListener('click', () => { if (aid) openApplicantFromLeaderboard(aid); });
+    tr.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (aid) openApplicantFromLeaderboard(aid);
+      }
+    });
+  });
+}
+
+// ── APPLICANT ─────────────────────────────────────────────────────────────────
+function normalizeApplicantId(s) {
+  const t = String(s).trim();
+  if (!/^\d+$/.test(t)) return t;
+  return String(parseInt(t, 10));
+}
+
+let lookupTimeout = null;
+
+function openApplicantFromLeaderboard(applicantIdRaw) {
+  const raw = String(applicantIdRaw || '').trim();
+  if (!raw) return;
+  const navItems = document.querySelectorAll('.sidebar .nav-item');
+  const applicantNav = navItems[1];
+  if (applicantNav) showPage('applicant', applicantNav);
+  const input = document.getElementById('applicant-input');
+  const normalized = normalizeApplicantId(raw);
+  if (input) input.value = normalized;
+  lookupApplicant(normalized, true);
+}
+
+async function renderApplicantDetail(aid) {
+    const r = ALL_DATA.find(d => normalizeApplicantId(d.applicant_id) === aid);
+    if (!r) {
+      document.getElementById('applicant-result').innerHTML =
+        `<div style="color:var(--text3);font-size:14px;padding:20px 0;">Заявитель не найден</div>`;
+      return;
+    }
+
+    const ml = parseFloat(r.ml_probability || 0);
+    const comp = parseFloat(r.final_score || 0);
+    const ar = parseFloat(r.approval_rate || 0);
+    const cnt = parseInt(r.total_applications || 0);
+    const amt = parseFloat(r.total_amount_received || 0);
+    const isAnom = isAnomalyFlag(r.is_anomaly);
+
+    document.getElementById('applicant-result').innerHTML = `
+      <div class="score-grid">
+        <div class="score-card blue">
+          <div class="score-label">Вероятность по ИИ</div>
+          <div class="score-number blue">${(isFinite(ml) ? ml : 0).toFixed(2)}</div>
+          <div class="score-rank">Ранг по ИИ #${r.ml_rank || '—'} · всего ${ALL_DATA.length}</div>
+        </div>
+        <div class="score-card orange">
+          <div class="score-label">Классическая формула (композит)</div>
+          <div class="score-number orange">${(isFinite(comp) ? comp : 0).toFixed(2)}</div>
+          <div class="score-rank">Ранг по композиту #${r.rank || '—'}</div>
+        </div>
+      </div>
+
+      <div class="detail-grid">
+        <div>
+          <div class="card" style="margin-bottom:12px;">
+            <div class="card-header"><span class="card-title">Вклад факторов</span></div>
+            <div class="card-body">
+              <div id="factor-bars" class="factor-bars">
+                <div class="loading"><div class="spinner"></div>Загрузка факторов...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="profile-card">
+          <div class="field-label">Регион</div>
+          <div class="field-value" style="margin-bottom:14px;">${r.oblast || '—'}</div>
+          <div class="field-label">Направление</div>
+          <div class="field-value" style="margin-bottom:14px;font-size:13px;">
+            ${(r.primary_direction || '—').replace('Субсидирование в ', '')}
+          </div>
+          <div class="field-label">Всего заявок</div>
+          <div class="field-value" style="margin-bottom:14px;">
+            ${cnt.toLocaleString('ru')}
+          </div>
+          <div class="field-label">Доля одобрений</div>
+          <div class="field-value" style="margin-bottom:14px;">${Math.round(ar * 100)}%</div>
+          <div class="field-label">Кластер</div>
+          <div class="field-value">
+            <span class="badge ${CLUSTER_BADGE[r.cluster_label] || 'badge-blue'}">${r.cluster_label || '—'}</span>
+          </div>
+
+          ${isAnom
+            ? `<div class="anomaly-alert">
+                <div class="anomaly-alert-title">
+                  <span class="anomaly-dot"></span> Повышенный риск
+                </div>
+                <div class="anomaly-alert-text">${r.anomaly_reason || ''}</div>
+              </div>`
+            : `<div class="ok-alert">✓ В пределах нормы</div>`}
+        </div>
+
+        <div class="card">
+          <div class="card-header"><span class="card-title">Пояснение</span></div>
+          <div class="card-body">
+            <div id="key-explain" style="color:var(--text2);font-size:13px;line-height:1.6;">
+              —
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Composite factor bars from backend (exact contribution values)
+    try {
+      const resp = await fetch(API + '/api/explain/' + encodeURIComponent(aid));
+      const exp = await resp.json();
+
+      if (exp && exp.factors) {
+        const factors = Object.values(exp.factors).sort((a, b) => b.contribution - a.contribution);
+        const maxC = Math.max(...factors.map(f => f.contribution), 1e-9);
+        const bars = factors.map(f => {
+          const label = f.label;
+          const w = Math.max(3, (f.contribution / maxC) * 100);
+          return `
+            <div class="factor-row">
+              <div class="factor-label">${label}</div>
+              <div class="factor-track"><div class="factor-fill" style="width:${w}%;"></div></div>
+              <div class="factor-val">${Number(f.contribution || 0).toFixed(3)}</div>
+            </div>
+          `;
+        }).join('');
+
+        const factorBarsEl = document.getElementById('factor-bars');
+        if (factorBarsEl) factorBarsEl.innerHTML = bars;
+
+        const keyExplain = document.getElementById('key-explain');
+        if (keyExplain && exp.explanation_ru) keyExplain.textContent = exp.explanation_ru;
+      }
+    } catch (e) {
+      const factorBarsEl = document.getElementById('factor-bars');
+      if (factorBarsEl) factorBarsEl.innerHTML =
+        `<div style="color:var(--text3);font-size:13px;">Не удалось загрузить объяснение факторов.</div>`;
+    }
+}
+
+function lookupApplicant(val, immediate = false) {
+  clearTimeout(lookupTimeout);
+  if (!val || val.length < 6) {
+    document.getElementById('applicant-result').innerHTML = '';
+    return;
+  }
+  const aid = normalizeApplicantId(val.trim());
+  const run = () => { renderApplicantDetail(aid); };
+  if (immediate) run();
+  else lookupTimeout = setTimeout(run, 400);
+}
+
+// ── SEGMENTS ──────────────────────────────────────────────────────────────────
+let scatterChart = null, donutChart = null;
+function renderSegments() {
+  const data = getFilteredData();
+  // Bubble / scatter
+  const clusterGroups = {};
+  data.forEach(r => {
+    const cl = r.cluster_label || 'Другие';
+    if (!clusterGroups[cl]) clusterGroups[cl] = [];
+    clusterGroups[cl].push({
+      x: parseFloat(r.approval_rate||0) * 100,
+      y: parseFloat(r.total_amount_received||0) / 1e6,
+      r: Math.max(4, Math.min(20, parseFloat(r.total_applications||0) / 50)),
+      id: r.applicant_id,
+    });
+  });
+
+  const scatterDatasets = Object.entries(clusterGroups).map(([cl,pts]) => ({
+    label: cl, data: pts,
+    backgroundColor: (CLUSTER_COLORS[cl]||'#7A7F8E') + '99',
+    borderColor: CLUSTER_COLORS[cl]||'#7A7F8E',
+    borderWidth: 1,
+    pointRadius: pts.map(p => p.r),
+  }));
+
+  const sctx = document.getElementById('chart-scatter').getContext('2d');
+  if (scatterChart) scatterChart.destroy();
+  scatterChart = new Chart(sctx, {
+    type: 'bubble',
+    data: { datasets: scatterDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position:'top', labels: { color:'#B6B7C2', font:{size:12},
+          boxWidth:10, usePointStyle:true } }
+      },
+      scales: {
+        x: { min:0, max:105, grid: { color:'rgba(255,255,255,0.06)' },
+             ticks: { color:'#7A7F8E', font:{size:11}, callback: v=>v+'%' },
+             title: { display:true, text:'Доля одобрений', color:'#7A7F8E', font:{size:11} } },
+        y: { grid: { color:'rgba(255,255,255,0.06)' },
+             ticks: { color:'#7A7F8E', font:{size:11}, callback: v => v + '\u00A0млн' },
+             title: { display:true, text:'Сумма субсидий, млн тг', color:'#7A7F8E', font:{size:11} } }
+      }
+    }
+  });
+
+  // Donut + table
+  const clusterStats = {};
+  data.forEach(r => {
+    const cl = r.cluster_label || 'Другие';
+    if (!clusterStats[cl]) clusterStats[cl] = {count:0, mlSum:0, arSum:0, amtSum:0};
+    clusterStats[cl].count++;
+    clusterStats[cl].mlSum  += parseFloat(r.ml_probability||0);
+    clusterStats[cl].arSum  += parseFloat(r.approval_rate||0);
+    clusterStats[cl].amtSum += parseFloat(r.total_amount_received||0) / 1e6;
+  });
+
+  const clEntries = Object.entries(clusterStats).sort((a,b) => b[1].count - a[1].count);
+
+  const dctx = document.getElementById('chart-donut').getContext('2d');
+  if (donutChart) donutChart.destroy();
+  donutChart = new Chart(dctx, {
+    type: 'doughnut',
+    data: {
+      labels: clEntries.map(([cl]) => cl),
+      datasets: [{
+        data: clEntries.map(([,s]) => s.count),
+        backgroundColor: clEntries.map(([cl]) => (CLUSTER_COLORS[cl]||'#7A7F8E')+'CC'),
+        borderWidth: 0, hoverOffset: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '68%',
+      plugins: {
+        legend: { position:'bottom', labels: { color:'#B6B7C2', font:{size:11},
+          boxWidth:8, usePointStyle:true, padding:10 } }
+      }
+    }
+  });
+
+  document.getElementById('cluster-tbody').innerHTML = clEntries.map(([cl,s]) => `
+    <tr>
+      <td><span class="badge ${CLUSTER_BADGE[cl]||'badge-blue'}">${cl}</span></td>
+      <td style="font-weight:600;">${s.count}</td>
+      <td>${(s.mlSum/s.count).toFixed(3)}</td>
+      <td>${Math.round(s.arSum/s.count*100)}%</td>
+      <td>${Math.round(s.amtSum/s.count).toLocaleString('ru')} млн</td>
+    </tr>`).join('');
+}
+
+// ── ANOMALIES ─────────────────────────────────────────────────────────────────
+function renderAnomalies() {
+  const data = getFilteredData();
+  const allAnoms = data.filter(r => isAnomalyFlag(r.is_anomaly));
+  const anoms = allAnoms
+    .filter(r => matchesAnomalySearch(r, ANOMALY_SEARCH_QUERY))
+    .sort((a,b) => parseFloat(a.anomaly_score) - parseFloat(b.anomaly_score));
+
+  const sub = ANOMALY_SEARCH_QUERY.trim()
+    ? `Показано ${anoms.length} из ${allAnoms.length} (учтены поиск и фильтры сайдбара). Рекомендуется ручная проверка документов.`
+    : 'Рекомендуется ручная проверка документов.';
+
+  document.getElementById('anomaly-banner').innerHTML = `
+    <div class="warn-banner">
+      <div class="warn-icon">⚠️</div>
+      <div>
+        <div class="warn-title">Аномалий: ${allAnoms.length} · в таблице: ${anoms.length}</div>
+        <div class="warn-sub">${sub}</div>
+      </div>
+    </div>`;
+
+  const tbody = document.getElementById('anomaly-tbody');
+  if (!anoms.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="loading">${
+      allAnoms.length
+        ? (ANOMALY_SEARCH_QUERY.trim() ? 'Никого не найдено по поиску' : 'Нет записей')
+        : 'Аномалий нет при текущих фильтрах'
+    }</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = anoms.map(r => {
+    const ml = parseFloat(r.ml_probability||0);
+    const as = parseFloat(r.anomaly_score||0);
+    const critical = as < -0.2;
+    const mlCls = ml > 0.5 ? 'green' : 'red';
+    const aidEsc = String(r.applicant_id).replace(/"/g, '&quot;');
+    return `<tr class="rating-row ${critical ? 'anomaly-row' : ''}" role="button" tabindex="0" data-aid="${aidEsc}" title="Открыть профиль">
+      <td style="font-weight:600;">${r.applicant_id}</td>
+      <td>${progressHTML(ml, mlCls)}</td>
+      <td style="font-weight:500;color:${critical?'var(--red)':'var(--text2)'};">${as.toFixed(4)}</td>
+      <td style="font-size:12px;color:var(--text2);max-width:360px;">${r.anomaly_reason||'—'}</td>
+      <td style="color:var(--text3);font-size:12px;">${r.oblast||'—'}</td>
+      <td style="color:var(--text3);font-size:12px;">
+        ${(r.primary_direction||'').replace('Субсидирование в ','')}
+      </td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('tr.rating-row').forEach(tr => {
+    const aid = tr.getAttribute('data-aid');
+    tr.addEventListener('click', () => { if (aid) openApplicantFromLeaderboard(aid); });
+    tr.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (aid) openApplicantFromLeaderboard(aid);
+      }
+    });
+  });
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>

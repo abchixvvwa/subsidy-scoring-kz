@@ -49,7 +49,7 @@ from src.ml_model import run_full_ml_pipeline                         # noqa: E4
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="Subsidy Scoring System API",
+    title="КазнаЛинза API",
     description=(
         "API системы merit-based скоринга сельхозпроизводителей Казахстана "
         "для получения субсидий. Хакатон Decentrathon 5.0, Кейс №2."

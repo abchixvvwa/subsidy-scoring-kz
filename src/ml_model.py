@@ -27,6 +27,7 @@ from sklearn.cluster import KMeans
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score
+from sklearn.calibration import CalibratedClassifierCV
 import joblib
 
 try:
@@ -387,9 +388,9 @@ def train_lightgbm(features_df: pd.DataFrame) -> pd.DataFrame:
     """
     Обучает LightGBM classifier для предсказания надёжности заявителя.
 
-    Таргет (y): 1 если заявитель входит в топ-33% по approval_rate
-                И total_amount_received > медианы — иначе 0.
-    Признаки:   LGBM_FEATURES (без approval_rate и rejection_rate — нет leakage).
+    Таргет (y): топ 50% заявителей по проценту одобрений (approval_rate >= median).
+    Признаки (7): поведенческие и суммовые сигналы (approval_rate/rejection_rate исключены — утечка).
+    Калибровка: CalibratedClassifierCV(cv=5, method='sigmoid') — сглаживает вероятности в [0.1..0.9].
     """
     if not _LGBM_AVAILABLE:
         print("  [LightGBM] Пропускаем — lightgbm не установлен.")
@@ -399,78 +400,73 @@ def train_lightgbm(features_df: pd.DataFrame) -> pd.DataFrame:
 
     df = features_df.copy()
 
-    # ── 1. Подготовка данных ─────────────────────────────────────────────────
-    missing = [c for c in LGBM_FEATURES if c not in df.columns]
+    # ── 1. Таргет: топ 50% заявителей по проценту одобрений ─────────────────
+    median_approval = features_df["approval_rate"].median()
+    y = (features_df["approval_rate"] >= median_approval).astype(int)
+
+    print(f"\n  [LightGBM] Таргет: топ-50% по approval_rate (median={median_approval:.3f})")
+    print(f"  target=1: {int(y.sum())} ({y.mean():.1%}), target=0: {int((~y.astype(bool)).sum())}")
+
+    # ── 2. Признаки (БЕЗ approval_rate и rejection_rate — утечка данных) ────
+    lgbm_features = [
+        "total_applications",
+        "total_amount_received",
+        "avg_amount",
+        "max_amount",
+        "unique_directions",
+        "unique_subsidy_types",
+        "last_activity_days",
+    ]
+
+    missing = [c for c in lgbm_features if c not in df.columns]
     if missing:
         raise KeyError(f"Отсутствуют признаки для LightGBM: {missing}")
 
-    X = df[LGBM_FEATURES].fillna(df[LGBM_FEATURES].median())
+    X = df[lgbm_features].fillna(df[lgbm_features].median())
 
-    # Таргет: надёжный заявитель с реальным опытом
-    # approval_rate >= 0.80  — высокая доля одобрений
-    # total_applications >= 10  — исключаем единичные заявки
-    # total_amount_received >= quantile(0.40)  — значимый объём субсидий
-    amount_q40 = features_df["total_amount_received"].quantile(0.40)
-    y = (
-        (features_df["approval_rate"] >= 0.80) &
-        (features_df["total_applications"] >= 10) &
-        (features_df["total_amount_received"] >= amount_q40)
-    ).astype(int)
-
-    pos_rate = y.mean()
-    print(f"\n  [LightGBM] Target: approval_rate >= 0.80 "
-          f"AND applications >= 10 AND amount >= {amount_q40/1e6:.1f}M")
-    print(f"  Позитивных примеров: {int(y.sum())} из {len(y)}")
-    print(f"  [LightGBM] Подготовка: {len(X)} записей, "
-          f"target=1: {int(y.sum())} ({pos_rate:.1%}), "
-          f"target=0: {int((~y.astype(bool)).sum())}")
-
-    # ── 2. Кросс-валидация ───────────────────────────────────────────────────
-    model = LGBMClassifier(
-        n_estimators=200,
+    # ── 3. Базовая модель с защитой от переобучения ──────────────────────────
+    base_model = LGBMClassifier(
+        n_estimators=100,
         learning_rate=0.05,
-        max_depth=4,
-        min_child_samples=5,
+        max_depth=3,
+        min_child_samples=10,
         subsample=0.8,
         colsample_bytree=0.8,
         random_state=42,
         verbose=-1,
     )
 
-    cv_scores = cross_val_score(
-        model, X, y,
-        cv=5,
-        scoring="roc_auc",
-        n_jobs=-1,
-    )
-    mean_auc = cv_scores.mean()
-    std_auc  = cv_scores.std()
-    print(f"  [LightGBM] 5-Fold CV ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}")
-    print(f"  [LightGBM] По фолдам: {[round(s, 4) for s in cv_scores]}")
+    # ── 4. Калибровка (cv=5 — кросс-валидация + сглаживание вероятностей) ───
+    calibrated = CalibratedClassifierCV(base_model, cv=5, method="sigmoid")
+    calibrated.fit(X, y)
+    print("  [LightGBM] Калибровка (cv=5, sigmoid) выполнена.")
 
-    # ── 3. Обучение на всех данных ───────────────────────────────────────────
-    model.fit(X, y)
-    print("  [LightGBM] Модель обучена на полных данных.")
-
-    # ── 4. Предсказания ──────────────────────────────────────────────────────
-    df["ml_probability"] = model.predict_proba(X)[:, 1].round(6)
+    # ── 5. Сохраняем вероятности и ранг ─────────────────────────────────────
+    df["ml_probability"] = calibrated.predict_proba(X)[:, 1]
     df["ml_rank"]        = df["ml_probability"].rank(
-        ascending=False, method="first"
+        ascending=False, method="min"
     ).astype(int)
 
-    # ── 5. Feature importance ────────────────────────────────────────────────
-    importance_df = pd.DataFrame({
-        "Признак":              LGBM_FEATURES,
-        "Важность (split)":    model.feature_importances_,
-    }).sort_values("Важность (split)", ascending=False).reset_index(drop=True)
-    importance_df.index += 1
-    print("\n  [LightGBM] Feature Importances:")
-    print(importance_df.to_string())
+    print("Распределение ML Score:")
+    print(df["ml_probability"].describe().round(4))
 
-    # ── 6. Сохранение модели ─────────────────────────────────────────────────
+    # ── 6. Feature importance (из первого калибратора) ───────────────────────
+    try:
+        inner_model = calibrated.calibrated_classifiers_[0].estimator
+        importance_df = pd.DataFrame({
+            "Признак":          lgbm_features,
+            "Важность (split)": inner_model.feature_importances_,
+        }).sort_values("Важность (split)", ascending=False).reset_index(drop=True)
+        importance_df.index += 1
+        print("\n  [LightGBM] Feature Importances:")
+        print(importance_df.to_string())
+    except Exception:
+        pass
+
+    # ── 7. Сохранение калиброванной модели ───────────────────────────────────
     model_path = Path(MODEL_PATH)
     model_path.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, model_path)
+    joblib.dump(calibrated, model_path)
     print(f"  [LightGBM] Модель сохранена → {model_path.resolve()}")
 
     return df
