@@ -45,8 +45,7 @@ FEATURES_PATH   = "data/processed/features.csv"
 ML_RESULTS_PATH = "data/processed/ml_results.csv"
 MODEL_PATH      = "data/processed/lgbm_model.pkl"
 
-# Признаки для LightGBM (approval_rate и rejection_rate исключены — утечка данных:
-# таргет y строится из approval_rate, поэтому оставлять её в X нельзя)
+# Признаки для LightGBM (approval_rate / rejection_rate исключены — утечка)
 LGBM_FEATURES = [
     "total_applications",
     "total_amount_received",
@@ -66,12 +65,39 @@ CLUSTER_FEATURES = [
     "last_activity_days",
 ]
 
-# Признаки, которые НЕ используются при обнаружении аномалий
-# (нечисловые или ненужные идентификаторы)
+# Не подмешивать в Isolation Forest (утечки, служебные поля, нормы из composite)
 EXCLUDE_FROM_ANOMALY = [
     "applicant_id",
     "oblast",
     "primary_direction",
+    "approval_rate",
+    "rejection_rate",
+    "ml_probability",
+    "ml_rank",
+    "final_score",
+    "rank",
+    "cluster",
+    "recency_score",
+    "approval_rate_norm",
+    "total_amount_received_norm",
+    "total_applications_norm",
+    "unique_directions_norm",
+    "cluster_label",
+]
+
+# Только поведенческие признаки для Isolation Forest
+ANOMALY_FEATURES = [
+    "total_applications",
+    "approved_count",
+    "rejected_count",
+    "withdrawn_count",
+    "total_amount_received",
+    "avg_amount",
+    "max_amount",
+    "unique_directions",
+    "unique_subsidy_types",
+    "last_activity_days",
+    "first_application_year",
 ]
 
 # Порог для флага аномалии: используем contamination IsolationForest
@@ -323,31 +349,23 @@ def detect_anomalies(features_df: pd.DataFrame) -> pd.DataFrame:
     """
     Обнаруживает аномальных заявителей с помощью Isolation Forest.
 
-    Шаги:
-    1. Выбирает все числовые признаки (кроме EXCLUDE_FROM_ANOMALY).
-    2. Обучает IsolationForest(contamination=0.05).
-    3. Добавляет колонки ``is_anomaly``, ``anomaly_score``, ``anomaly_reason``.
-
-    Parameters
-    ----------
-    features_df : pd.DataFrame
-        Датафрейм признаков заявителей (уже прошедший кластеризацию или нет).
-
-    Returns
-    -------
-    pd.DataFrame
-        Исходный датафрейм с добавленными колонками.
+    Используются только признаки из ``ANOMALY_FEATURES`` (поведенческие);
+    служебные и утечки перечислены в ``EXCLUDE_FROM_ANOMALY``.
     """
     df = features_df.copy()
 
-    # ── 1. Числовые признаки ─────────────────────────────────────────────────
-    num_cols = [
-        c for c in df.select_dtypes(include=[np.number]).columns
-        if c not in EXCLUDE_FROM_ANOMALY
-           and c not in ("cluster",)          # не берём синтетические колонки
-    ]
+    num_cols = [c for c in ANOMALY_FEATURES if c in df.columns]
+    missing = [c for c in ANOMALY_FEATURES if c not in df.columns]
+    if missing:
+        print(f"  [IsolationForest] Предупреждение: нет колонок {missing}")
 
-    X = df[num_cols].fillna(df[num_cols].median())
+    if not num_cols:
+        raise ValueError("Нет ни одного признака для Isolation Forest из ANOMALY_FEATURES.")
+
+    X = df[num_cols].copy()
+    for c in num_cols:
+        X[c] = pd.to_numeric(X[c], errors="coerce")
+    X = X.fillna(X.median())
 
     # ── 2. Обучение IsolationForest ──────────────────────────────────────────
     print(f"\n  [IsolationForest] Признаки ({len(num_cols)}): {num_cols}")
@@ -388,9 +406,9 @@ def train_lightgbm(features_df: pd.DataFrame) -> pd.DataFrame:
     """
     Обучает LightGBM classifier для предсказания надёжности заявителя.
 
-    Таргет (y): топ 50% заявителей по проценту одобрений (approval_rate >= median).
-    Признаки (7): поведенческие и суммовые сигналы (approval_rate/rejection_rate исключены — утечка).
-    Калибровка: CalibratedClassifierCV(cv=5, method='sigmoid') — сглаживает вероятности в [0.1..0.9].
+    Таргет (y): одобрение ≥ медианы И сумма субсидий ≥ медианы (~25% класса 1).
+    Признаки: ``LGBM_FEATURES`` (без approval_rate / rejection_rate — утечка).
+    Калибровка: CalibratedClassifierCV(cv=5, method='sigmoid').
     """
     if not _LGBM_AVAILABLE:
         print("  [LightGBM] Пропускаем — lightgbm не установлен.")
@@ -400,23 +418,21 @@ def train_lightgbm(features_df: pd.DataFrame) -> pd.DataFrame:
 
     df = features_df.copy()
 
-    # ── 1. Таргет: топ 50% заявителей по проценту одобрений ─────────────────
-    median_approval = features_df["approval_rate"].median()
-    y = (features_df["approval_rate"] >= median_approval).astype(int)
+    # ── 1. Таргет: строже — и одобрение, и масштаб субсидий не ниже медиан ───
+    median_amount = df["total_amount_received"].median()
+    median_approval = df["approval_rate"].median()
+    y = (
+        (df["approval_rate"] >= median_approval)
+        & (df["total_amount_received"] >= median_amount)
+    ).astype(int)
 
-    print(f"\n  [LightGBM] Таргет: топ-50% по approval_rate (median={median_approval:.3f})")
-    print(f"  target=1: {int(y.sum())} ({y.mean():.1%}), target=0: {int((~y.astype(bool)).sum())}")
+    print(
+        f"\n  [LightGBM] Таргет: approval≥median ({median_approval:.4f}) "
+        f"И total_amount≥median ({median_amount:,.0f} тг)"
+    )
+    print(f"  target=1: {int(y.sum())} ({y.mean():.1%}), target=0: {int(len(y) - y.sum())}")
 
-    # ── 2. Признаки (БЕЗ approval_rate и rejection_rate — утечка данных) ────
-    lgbm_features = [
-        "total_applications",
-        "total_amount_received",
-        "avg_amount",
-        "max_amount",
-        "unique_directions",
-        "unique_subsidy_types",
-        "last_activity_days",
-    ]
+    lgbm_features = list(LGBM_FEATURES)
 
     missing = [c for c in lgbm_features if c not in df.columns]
     if missing:

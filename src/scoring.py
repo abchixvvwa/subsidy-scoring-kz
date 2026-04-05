@@ -54,12 +54,16 @@ WEIGHTS: dict[str, float] = {
 
 assert abs(sum(WEIGHTS.values()) - 1.0) < 1e-9, "Сумма весов должна равняться 1.0"
 
-# Признаки, по которым делаем прямую Min-Max нормализацию
-_DIRECT_NORM_COLS = [
+# Min-Max по исходной шкале
+_MINMAX_COLS = [
     "approval_rate",
+    "unique_directions",
+]
+# Log1p затем Min-Max по log-значениям (тяжёлые хвосты)
+_LOG_MINMAX_COLS = [
     "total_amount_received",
     "total_applications",
-    "unique_directions",
+    "avg_amount",
 ]
 
 # Читаемые названия для объяснений
@@ -78,11 +82,12 @@ _FACTOR_LABELS: dict[str, str] = {
 
 def normalize_features(features_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Min-Max нормализация числовых признаков в диапазон [0, 1].
+    Нормализация признаков в диапазон [0, 1] для composite score.
 
-    Для каждой колонки из _DIRECT_NORM_COLS добавляет ``<col>_norm``.
-    ``recency_score = 1 − normalize(last_activity_days)``:
-    чем меньше дней с последней активности → тем выше балл актуальности.
+    - ``total_amount_received``, ``total_applications``, ``avg_amount``:
+      ``log1p`` затем Min-Max по log-значениям.
+    - ``approval_rate``, ``unique_directions``: прямой Min-Max.
+    - ``recency_score = 1 − normalize(last_activity_days)``.
 
     Parameters
     ----------
@@ -97,8 +102,18 @@ def normalize_features(features_df: pd.DataFrame) -> pd.DataFrame:
     """
     df = features_df.copy()
 
-    # Прямая нормализация
-    for col in _DIRECT_NORM_COLS:
+    # Log1p + Min-Max по log (как в ТЗ)
+    for col in _LOG_MINMAX_COLS:
+        if col not in df.columns:
+            continue
+        df[f"{col}_norm"] = np.log1p(df[col].clip(lower=0).astype(float))
+        c = df[f"{col}_norm"]
+        lo, hi = c.min(), c.max()
+        denom = hi - lo + 1e-9
+        df[f"{col}_norm"] = (c - lo) / denom
+
+    # Прямая Min-Max
+    for col in _MINMAX_COLS:
         if col not in df.columns:
             raise KeyError(
                 f"Ожидалась колонка '{col}', но она отсутствует в датафрейме."
